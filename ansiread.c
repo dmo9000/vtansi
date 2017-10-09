@@ -55,6 +55,8 @@ char ansi_mode = 0;
 char last_ansi_mode = 0;
 int ansioffset = 0;
 int paramidx = 0;
+off_t offset = 0;
+off_t current_escape_address = 0;
 
 int decode_1B(char);
 int decode_5B(char);
@@ -75,7 +77,6 @@ int main(int argc, char *argv[])
     char *bufptr = NULL;
     char *scanptr = NULL;
     char *endptr = NULL;
-    off_t offset = 0;
     size_t elements_read = 0;
     size_t bytes_read = 0;
     char c = 0;
@@ -113,7 +114,7 @@ int main(int argc, char *argv[])
 						ansi_mode = SEQ_NONE;
 						break;
         case SEQ_ERR:
-            printf("--\n0x%04x: error in state, ansi_mode = [%s], last_ansi_mode = [%s], character = 0x%02X '%c'\n", offset,
+            printf("--\n0x%04x: error in state, ansi_mode = [%s], last_ansi_mode = [%s], character = 0x%02X '%c'\n", current_escape_address,
                    (const char *) ansi_state(ansi_mode), (const char *) ansi_state(last_ansi_mode), last_c, (last_c < 32 ? '.' : last_c));
             printf("ANSIBUF[0x%02X]: ", ansioffset);
             for (i = 0; i < ansioffset; i++) {
@@ -127,6 +128,7 @@ int main(int argc, char *argv[])
             exit(1);
             break;
         case SEQ_NONE:
+						/* record address of current escape sequence */
             last_ansi_mode = ansi_mode;
             ansi_mode = decode_1B(c);
             offset++;
@@ -150,7 +152,7 @@ int main(int argc, char *argv[])
             last_ansi_mode = ansi_mode;
             ansi_mode = SEQ_NONE;
 
-            printf("0x%08x: ", offset);
+            printf("0x%08x: ", current_escape_address);
 
             printf("EXECUTED: < ");
             for (i = 0; i < ansioffset; i++) {
@@ -207,6 +209,7 @@ int decode_5B(char c)
     if (ansi_mode == SEQ_ESC_1B && c == '[') {
         ansibuf[ansioffset] = c;
         ansioffset++;
+				current_escape_address = offset;
         return SEQ_ANSI_5B;
     }
 
