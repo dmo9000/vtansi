@@ -190,13 +190,12 @@ int decode_1B(char c)
 
 int decode_5B(char c)
 {
-     printf("decode_5B(0x%02x, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
+    printf("decode_5B(0x%02x, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
     if (ansi_mode == SEQ_ESC_1B && c == '[') {
         ansibuf[ansioffset] = c;
         ansioffset++;
         return SEQ_ANSI_5B;
     }
-
 
     return SEQ_ERR;
 }
@@ -217,7 +216,23 @@ int decode_command(char c)
             ansioffset++;
             return SEQ_ANSI_IPARAM;
         }
-        return SEQ_ERR;
+	
+				/* process character commands */
+
+        ansibuf[ansioffset] = c;
+        ansioffset++;
+
+				switch (c) {
+					case 'B':
+						return ansi_decode_cmd_B();
+						break;
+					default:
+						printf("+++ decoding command: character = 0x%02x '%c'\n", c, c);
+        		return SEQ_ERR;
+						break;
+					}
+				
+
     }
     return SEQ_ERR;
 }
@@ -328,18 +343,17 @@ int ansi_decode_cmd_J()
 int ansi_decode_cmd_B()
 {
     printf("ansi_decode_cmd_B(%d parameters)\n", paramidx);
-		paramidx++;
-    if (paramidx != 1) {
-        printf("ansi_decode_cmd_B() - invalid parameter count = [%d]\n", paramidx);
-        return SEQ_ERR;
-    }
-    /* check the parameter0 is a '2', ie. for '2J' */
-
     printf("> move cursor down %d lines\n", parameters[0]);
+
+		if (parameters[0] == -1) {
+    	printf("> move cursor down %d lines ; invalid parameter %d\n", parameters[0], parameters[0]);
+			return SEQ_ANSI_EXECUTED;
+			}
+	
     cursor_y += parameters[0];
     if (cursor_y > (CONSOLE_HEIGHT - 1)) {
         cursor_y = CONSOLE_HEIGHT - 1;
     }
-    /* processed entirety of 'J' command */
+    /* processed entirety of 'B' command */
     return SEQ_ANSI_EXECUTED;
 }
