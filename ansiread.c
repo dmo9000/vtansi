@@ -27,7 +27,9 @@ int parameters[MAX_PARAMS];
 #define SEQ_ANSI_CMD_M			5
 #define SEQ_ANSI_CMD_J			6
 #define SEQ_ANSI_CMD_B			7
-#define SEQ_ANSI_EXECUTED		8
+#define SEQ_ANSI_CMD_H			8	
+#define SEQ_ANSI_EXECUTED		9
+#define SEQ_NOOP					 10
 
 static char *states[] = {
     "SEQ_ERR",
@@ -38,7 +40,9 @@ static char *states[] = {
     "SEQ_ANSI_CMD_M",
     "SEQ_ANSI_CMD_J",
     "SEQ_ANSI_CMD_B",
-    "SEQ_ANSI_EXECUTED"
+    "SEQ_ANSI_CMD_H",
+    "SEQ_ANSI_EXECUTED",
+		"SEQ_NOOP"
 };
 
 
@@ -58,6 +62,7 @@ int decode_integer_parameter(char);
 int ansi_decode_cmd_m();									/* text attributes, foreground and background color handling */
 int ansi_decode_cmd_J();									/* "home" command (2J) */
 int ansi_decode_cmd_B();									/* move down n lines */
+int ansi_decode_cmd_H();									/* set cursor position */
 
 void init_parameters();
 const char *ansi_state(int s);
@@ -102,13 +107,16 @@ int main(int argc, char *argv[])
         last_c = c;
         c = scanptr[0];
         switch(ansi_mode) {
+				case SEQ_NOOP:
+						ansi_mode = SEQ_NONE;
+						break;
         case SEQ_ERR:
-            printf("--\n0x%04x: error in state, ansi_mode = [%s], last_ansi_mode = [%s], character = 0x%02x '%c'\n", offset,
+            printf("--\n0x%04x: error in state, ansi_mode = [%s], last_ansi_mode = [%s], character = 0x%02X '%c'\n", offset,
                    (const char *) ansi_state(ansi_mode), (const char *) ansi_state(last_ansi_mode), last_c, (last_c < 32 ? '.' : last_c));
-            printf("ANSIBUF[0x%02x]: ", ansioffset);
+            printf("ANSIBUF[0x%02X]: ", ansioffset);
             for (i = 0; i < ansioffset; i++) {
                 if (ansibuf[i] < 32) {
-                    printf("\\x%02x", ansibuf[i]);
+                    printf("\\x%02X", ansibuf[i]);
                 } else {
                     printf("%c", ansibuf[i]);
                 }
@@ -142,7 +150,7 @@ int main(int argc, char *argv[])
             printf("EXECUTED: < ");
             for (i = 0; i < ansioffset; i++) {
                 if (ansibuf[i] < 32) {
-                    printf("\\x%02x", ansibuf[i]);
+                    printf("\\x%02X", ansibuf[i]);
                 } else {
                     printf("%c", ansibuf[i]);
                 }
@@ -150,12 +158,12 @@ int main(int argc, char *argv[])
             printf(" >\n");
             break;
         default:
-            printf("--\n0x%04x: error in state [UNHANDLED], ansi_mode = [%s], last_ansi_mode = [%s], character = 0x%02x\n", offset,
+            printf("--\n0x%04x: error in state [UNHANDLED], ansi_mode = [%s], last_ansi_mode = [%s], character = 0x%02X\n", offset,
                    (const char*) ansi_state(ansi_mode), (const char *) ansi_state(last_ansi_mode), last_c);
-            printf("ANSIBUF[0x%02x]: ", ansioffset);
+            printf("ANSIBUF[0x%02X]: ", ansioffset);
             for (i = 0; i < ansioffset; i++) {
                 if (ansibuf[i] < 32) {
-                    printf("\\x%02x", ansibuf[i]);
+                    printf("\\x%02X", ansibuf[i]);
                 } else {
                     printf("%c", ansibuf[i]);
                 }
@@ -175,8 +183,8 @@ int decode_1B(char c)
 {
     int i = 0;
 
-    // printf("decode_1B(0x%02x, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
-    if (ansi_mode == SEQ_NONE && c == 0x1b) {
+    // printf("decode_1B(0x%02X, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
+    if (ansi_mode == SEQ_NONE && c == 0x1B) {
         ansioffset = 0;
         memset(&ansibuf, 0, MAX_ANSI);
         ansibuf[ansioffset] = c;
@@ -190,7 +198,7 @@ int decode_1B(char c)
 
 int decode_5B(char c)
 {
-    printf("decode_5B(0x%02x, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
+    printf("decode_5B(0x%02X, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
     if (ansi_mode == SEQ_ESC_1B && c == '[') {
         ansibuf[ansioffset] = c;
         ansioffset++;
@@ -202,7 +210,7 @@ int decode_5B(char c)
 
 int decode_command(char c)
 {
-    printf("decode_command(0x%02x, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
+    printf("decode_command(0x%02X, ansi_mode = %s, last_ansi_mode = %s)\n", c, ansi_state(ansi_mode), ansi_state(last_ansi_mode));
     if (ansi_mode == SEQ_ANSI_5B) {
         if (isdigit(c)) {
             if (parameters[paramidx] == -1) {
@@ -211,7 +219,7 @@ int decode_command(char c)
                 printf("decode_command: starting new integer parameter, but parameter[%d] was not -1\n", paramidx);
                 return SEQ_ERR;
             }
-            printf("decode_command: first digit = 0x%02x '%c'\n", c, c);
+            printf("decode_command: first digit = 0x%02X '%c'\n", c, c);
             ansibuf[ansioffset] = c;
             ansioffset++;
             return SEQ_ANSI_IPARAM;
@@ -227,7 +235,7 @@ int decode_command(char c)
 						return ansi_decode_cmd_B();
 						break;
 					default:
-						printf("+++ decoding command: character = 0x%02x '%c'\n", c, c);
+						printf("+++ decoding command: character = 0x%02X '%c'\n", c, c);
         		return SEQ_ERR;
 						break;
 					}
@@ -249,6 +257,19 @@ int decode_integer_parameter(char c)
 
     if (!isdigit(c)) {
         switch (c) {
+				case 'H':
+            /* end of previous command parameter, increment and dispatch 'H' command */
+            paramidx++;
+            ansi_mode = SEQ_ANSI_CMD_H;
+            return ansi_decode_cmd_H();
+						break;
+				case ';':
+            /* end of previous command parameter, go back to collect another parameter */
+            printf("decode_integer_parameter:   parameter[%d] = %d\n", paramidx, parameters[paramidx]);
+            paramidx++;
+						parameters[paramidx] = 0;
+						return SEQ_ANSI_IPARAM;
+						break;
         case 'B':
             /* end of previous command parameter, increment and dispatch 'B' command */
             paramidx++;
@@ -266,13 +287,13 @@ int decode_integer_parameter(char c)
             ansi_mode = SEQ_ANSI_CMD_M;
             return ansi_decode_cmd_m();
         default:
-            printf("decode_integer_parameter:   non-digit = 0x%02x '%c'\n", c, c);
+            printf("decode_integer_parameter:   non-digit = 0x%02X '%c'\n", c, c);
             return SEQ_ERR;
             break;
         };
     }
 
-    //printf("decode_integer_parameter:  next digit = 0x%02x '%c'\n", c, c);
+    printf("decode_integer_parameter:  next digit[%d] = 0x%02X '%c'\n", paramidx, c, c);
     parameters[paramidx] *= 10;
     parameters[paramidx] += (c - 48);
     return SEQ_ANSI_IPARAM;
@@ -347,7 +368,8 @@ int ansi_decode_cmd_B()
 
 		if (parameters[0] == -1) {
     	printf("> move cursor down %d lines ; invalid parameter %d\n", parameters[0], parameters[0]);
-			return SEQ_ANSI_EXECUTED;
+			/* tricky one, not sure if it's legal, but it seems to be ignored anyway */
+			return SEQ_NOOP;
 			}
 	
     cursor_y += parameters[0];
@@ -356,4 +378,16 @@ int ansi_decode_cmd_B()
     }
     /* processed entirety of 'B' command */
     return SEQ_ANSI_EXECUTED;
+}
+
+int ansi_decode_cmd_H()
+{
+    printf("ansi_decode_cmd_H(%d parameters)\n", paramidx);
+		if (paramidx < 2) {
+					printf("+++ H command with less than 2 parameters (%d)\n", paramidx);
+					return SEQ_ERR;
+					}	
+
+	  printf("+++ H command, address = %d,%d\n", parameters[1], parameters[0]);
+		return SEQ_ERR;
 }
