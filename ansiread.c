@@ -156,7 +156,8 @@ int main(int argc, char *argv[])
             break;
         case SEQ_ANSI_EXECUTED:
 				case SEQ_NOOP:
-            printf("%08d: ", current_escape_address);
+            printf("%08d-%08d: ", current_escape_address, 
+								current_escape_address + ansioffset - 1);
             printf("%s: < ", ansi_state(ansi_mode));
             for (i = 0; i < ansioffset; i++) {
                 if (ansibuf[i] < 32) {
@@ -254,8 +255,9 @@ int decode_command(char c)
             return SEQ_NONE;
             break;
         case ';':
-           // printf("stored [%d:%d], new parameter -> %d\n", paramidx, parameters[paramidx], paramidx+1);
+            printf("stored [%d:%d], new parameter -> %d\n", paramidx, parameters[paramidx], paramidx+1);
             paramidx++;
+						 parameters[paramidx] = 0;
             return SEQ_ANSI_IPARAM;
             break;
         case 'A':
@@ -295,7 +297,7 @@ int decode_integer_parameter(char c)
             break;
         case ';':
             /* end of previous command parameter, go back to collect another parameter */
-//           printf("decode_integer_parameter:   parameter[%d] = %d\n", paramidx, parameters[paramidx]);
+           //printf("decode_integer_parameter:   parameter[%d] = %d\n", paramidx, parameters[paramidx]);
             paramidx++;
             parameters[paramidx] = 0;
             return SEQ_ANSI_IPARAM;
@@ -392,6 +394,10 @@ int ansi_decode_cmd_m()
         case 1:
             /* bold on */
             printf(">>> [%d] enable bold\n", i);
+            break;
+        case 2:
+            /* dark on */
+            printf(">>> [%d] enable dark\n", i);
             break;
         case 30:
         case 31:
@@ -550,6 +556,14 @@ int ansi_decode_cmd_H()
         return SEQ_ANSI_EXECUTED;
     }
 
+		/* SANITY CHECKING */
+
+		if (parameters[0] == -1) {
+//			printf("+++ fatal: setcursor received [;H, parameters[0] == -1\n");
+//			printf("+++ parameter1 = %d\n", parameters[1]);
+//			exit(1);
+			parameters[0] = 0;
+			}
     printf(">>> setcursor(%d,%d)\n", parameters[1], parameters[0]);
 
     if (parameters[1] > 0) {
